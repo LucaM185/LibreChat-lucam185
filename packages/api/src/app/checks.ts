@@ -135,14 +135,33 @@ export function checkVariables() {
  * Logs information or warning based on the API's availability and response.
  */
 export async function checkHealth() {
+  if (!process.env.RAG_API_URL) {
+    logger.debug(
+      'RAG_API_URL is not set. File parsing will use native (local) text extraction. To enable RAG, set RAG_API_URL to the base URL of your RAG API service.',
+    );
+    return;
+  }
+
   try {
     const response = await fetch(`${process.env.RAG_API_URL}/health`);
     if (response?.ok && response?.status === 200) {
       logger.info(`RAG API is running and reachable at ${process.env.RAG_API_URL}.`);
+    } else {
+      logger.warn(
+        `RAG API at ${process.env.RAG_API_URL} responded with status ${response?.status}. File uploads may fall back to native parsing. Verify the RAG service is healthy.`,
+      );
     }
   } catch {
     logger.warn(
-      `RAG API is either not running or not reachable at ${process.env.RAG_API_URL}, you may experience errors with file uploads.`,
+      `RAG API is not reachable at ${process.env.RAG_API_URL}.\n` +
+        'File uploads will fall back to native (local) text extraction.\n\n' +
+        'Common causes and fixes:\n' +
+        '  \u2022 Running in Docker and using "localhost": use the service/container name (e.g. RAG_API_URL=http://rag-api:8000)\n' +
+        '    or host.docker.internal (Mac/Windows Docker Desktop).\n' +
+        '  \u2022 On Linux with Docker: add --add-host=host.docker.internal:host-gateway to the LibreChat container\n' +
+        '    and set RAG_API_URL=http://host.docker.internal:<port>.\n' +
+        '  \u2022 RAG service not started: ensure the RAG API container/process is running and its port is published.\n\n' +
+        `Verify connectivity from inside the LibreChat container:\n  curl -i ${process.env.RAG_API_URL}/health`,
     );
   }
 }
