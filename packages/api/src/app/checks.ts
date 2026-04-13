@@ -152,20 +152,17 @@ export async function checkHealth() {
       );
     }
   } catch {
-    logger.warn(`\u200B
-RAG API is not reachable at ${process.env.RAG_API_URL}.
-File uploads will fall back to native (local) text extraction.
-
-Common causes and fixes:
-  • Running in Docker and using "localhost": use the service/container name (e.g. RAG_API_URL=http://rag-api:8000)
-    or host.docker.internal (Mac/Windows Docker Desktop).
-  • On Linux with Docker: add --add-host=host.docker.internal:host-gateway to the LibreChat container
-    and set RAG_API_URL=http://host.docker.internal:<port>.
-  • RAG service not started: ensure the RAG API container/process is running and its port is published.
-
-Verify connectivity from inside the LibreChat container:
-  curl -i ${process.env.RAG_API_URL}/health
-\u200B`);
+    logger.warn(
+      `RAG API is not reachable at ${process.env.RAG_API_URL}.\n` +
+        'File uploads will fall back to native (local) text extraction.\n\n' +
+        'Common causes and fixes:\n' +
+        '  \u2022 Running in Docker and using "localhost": use the service/container name (e.g. RAG_API_URL=http://rag-api:8000)\n' +
+        '    or host.docker.internal (Mac/Windows Docker Desktop).\n' +
+        '  \u2022 On Linux with Docker: add --add-host=host.docker.internal:host-gateway to the LibreChat container\n' +
+        '    and set RAG_API_URL=http://host.docker.internal:<port>.\n' +
+        '  \u2022 RAG service not started: ensure the RAG API container/process is running and its port is published.\n\n' +
+        `Verify connectivity from inside the LibreChat container:\n  curl -i ${process.env.RAG_API_URL}/health`,
+    );
   }
 }
 
