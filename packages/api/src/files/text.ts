@@ -39,13 +39,15 @@ export async function parseText({
     const healthResponse = await axios.get(`${process.env.RAG_API_URL}/health`, {
       timeout: 10000,
     });
-    if (healthResponse?.statusText !== 'OK' && healthResponse?.status !== 200) {
-      logger.debug('[parseText] RAG API health check failed, falling back to native parsing');
+    if (healthResponse?.status !== 200) {
+      logger.warn(
+        `[parseText] RAG API health check returned status ${healthResponse?.status} at ${process.env.RAG_API_URL}/health, falling back to native parsing`,
+      );
       return parseTextNative(file);
     }
   } catch (healthError) {
     logAxiosError({
-      message: '[parseText] RAG API health check failed, falling back to native parsing:',
+      message: `[parseText] RAG API at ${process.env.RAG_API_URL} is unreachable, falling back to native parsing. If running in Docker, ensure RAG_API_URL uses the container/service name or host.docker.internal instead of localhost.`,
       error: healthError,
     });
     return parseTextNative(file);

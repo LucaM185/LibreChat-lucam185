@@ -209,6 +209,67 @@ describe('text', () => {
       });
     });
 
+    it('should fall back to native parsing when health check returns 503 with statusText OK (bug regression)', async () => {
+      process.env.RAG_API_URL = 'http://rag-api.test';
+      const mockText = 'Native parsing result';
+      const mockBytes = Buffer.byteLength(mockText, 'utf8');
+
+      mockedReadFileAsString.mockResolvedValue({
+        content: mockText,
+        bytes: mockBytes,
+      });
+
+      mockedAxios.get.mockResolvedValue({
+        status: 503,
+        statusText: 'OK',
+      });
+
+      const result = await parseText({
+        req: mockReq,
+        file: mockFile,
+        file_id: mockFileId,
+      });
+
+      expect(result).toEqual({
+        text: mockText,
+        bytes: mockBytes,
+        source: FileSources.text,
+      });
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('should use RAG when health check returns status 200 with non-standard statusText', async () => {
+      process.env.RAG_API_URL = 'http://rag-api.test';
+      const ragText = 'RAG parsed result';
+
+      mockedAxios.get.mockResolvedValue({
+        status: 200,
+        statusText: 'Success',
+      });
+
+      mockedAxios.post.mockResolvedValue({
+        status: 200,
+        data: { text: ragText },
+      });
+
+      const result = await parseText({
+        req: mockReq,
+        file: mockFile,
+        file_id: mockFileId,
+      });
+
+      expect(mockedAxios.post).toHaveBeenCalledWith(
+        'http://rag-api.test/text',
+        expect.any(Object),
+        expect.objectContaining({ timeout: 300000 }),
+      );
+      expect(result).toEqual({
+        text: ragText,
+        bytes: Buffer.byteLength(ragText, 'utf8'),
+        source: FileSources.text,
+      });
+    });
+
     it('should accept empty text as valid RAG API response', async () => {
       process.env.RAG_API_URL = 'http://rag-api.test';
 
