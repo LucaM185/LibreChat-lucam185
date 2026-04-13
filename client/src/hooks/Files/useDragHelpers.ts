@@ -5,10 +5,8 @@ import { NativeTypes } from 'react-dnd-html5-backend';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRecoilValue, useSetRecoilState } from 'recoil';
 import {
-  Tools,
   QueryKeys,
   Constants,
-  inferMimeType,
   EToolResources,
   EModelEndpoint,
   mergeFileConfig,
@@ -22,7 +20,6 @@ import type { DropTargetMonitor } from 'react-dnd';
 import type * as t from 'librechat-data-provider';
 import store, { ephemeralAgentByConvoId } from '~/store';
 import useFileHandling from './useFileHandling';
-import { isEphemeralAgent } from '~/common';
 import useLocalize from '../useLocalize';
 
 export default function useDragHelpers() {
@@ -109,42 +106,23 @@ export default function useDragHelpers() {
       const capabilities = agentsConfig?.capabilities ?? defaultAgentCapabilities;
       const fileSearchEnabled = capabilities.includes(AgentCapabilities.file_search) === true;
       const codeEnabled = capabilities.includes(AgentCapabilities.execute_code) === true;
-      const contextEnabled = capabilities.includes(AgentCapabilities.context) === true;
 
-      let fileSearchAllowedByAgent = true;
-      let codeAllowedByAgent = true;
-
-      if (agentId && !isEphemeralAgent(agentId)) {
-        if (agent) {
-          const agentTools = agent.tools as string[] | undefined;
-          fileSearchAllowedByAgent = agentTools?.includes(Tools.file_search) ?? false;
-          codeAllowedByAgent = agentTools?.includes(Tools.execute_code) ?? false;
-        } else {
-          fileSearchAllowedByAgent = false;
-          codeAllowedByAgent = false;
-        }
+      /** Automatically upload to knowledge base and code interpreter without prompting.
+       * Files are uploaded once per enabled tool resource so each resource has its own copy. */
+      if (fileSearchEnabled) {
+        setEphemeralAgent((prev) => ({ ...prev, [EToolResources.file_search]: true }));
+        handleFilesRef.current(item.files, EToolResources.file_search);
       }
-
-      /** Determine if dragged files are all images (enables the base image option) */
-      const allImages = item.files.every((f) =>
-        inferMimeType(f.name, f.type)?.startsWith('image/'),
-      );
-
-      const shouldShowModal =
-        allImages ||
-        (fileSearchEnabled && fileSearchAllowedByAgent) ||
-        (codeEnabled && codeAllowedByAgent) ||
-        contextEnabled;
-
-      if (!shouldShowModal) {
-        // Fallback: directly handle files without showing modal
+      if (codeEnabled) {
+        setEphemeralAgent((prev) => ({ ...prev, [EToolResources.execute_code]: true }));
+        handleFilesRef.current(item.files, EToolResources.execute_code);
+      }
+      /** Fallback: neither capability is configured, upload as a plain message attachment */
+      if (!fileSearchEnabled && !codeEnabled) {
         handleFilesRef.current(item.files);
-        return;
       }
-      setDraggedFiles(item.files);
-      setShowModal(true);
     },
-    [isAssistants, queryClient, showToast, localize],
+    [isAssistants, queryClient, showToast, localize, setEphemeralAgent],
   );
 
   const [{ canDrop, isOver }, drop] = useDrop(
