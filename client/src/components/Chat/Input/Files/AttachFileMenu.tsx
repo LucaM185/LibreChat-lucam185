@@ -126,21 +126,25 @@ const AttachFileMenu = ({
 
       const canUseFileSearch = capabilities.fileSearchEnabled && fileSearchAllowedByAgent;
 
-      for (const file of fileList) {
-        let toolRes: EToolResources | undefined;
+      try {
+        for (const file of fileList) {
+          let toolRes: EToolResources | undefined;
 
-        const isPdf =
-          file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+          const isPdf =
+            file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
-        if (isPdf && canUseFileSearch) {
-          const pageCount = await getPdfPageCount(file);
-          if (pageCount > PDF_PAGE_THRESHOLD) {
-            toolRes = EToolResources.file_search;
-            setEphemeralAgent((prev) => ({ ...prev, [EToolResources.file_search]: true }));
+          if (isPdf && canUseFileSearch) {
+            const pageCount = await getPdfPageCount(file);
+            if (pageCount > PDF_PAGE_THRESHOLD) {
+              toolRes = EToolResources.file_search;
+              setEphemeralAgent((prev) => ({ ...prev, [EToolResources.file_search]: true }));
+            }
           }
-        }
 
-        await handleFiles([file], toolRes);
+          await handleFiles([file], toolRes);
+        }
+      } finally {
+        setFilesLoading(false);
       }
     },
     [

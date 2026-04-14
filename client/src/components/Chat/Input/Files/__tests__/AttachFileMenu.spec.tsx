@@ -180,7 +180,95 @@ describe('AttachFileMenu', () => {
     });
   });
 
-  describe('Edge Cases', () => {
+  describe('Auto-routing: large PDF to file search', () => {
+    it('routes a PDF with > 12 pages to file_search when capability is enabled', async () => {
+      const { getPdfPageCount: mockGetPdfPageCount } = jest.requireMock('~/utils');
+      mockGetPdfPageCount.mockResolvedValue(15);
+
+      const mockHandleFiles = jest.fn().mockResolvedValue(undefined);
+      mockUseFileHandlingNoChatContext.mockReturnValue({
+        handleFileChange: jest.fn(),
+        handleFiles: mockHandleFiles,
+      });
+      mockUseAgentCapabilities.mockReturnValue({
+        contextEnabled: false,
+        fileSearchEnabled: true,
+        codeEnabled: false,
+      });
+      mockUseAgentToolPermissions.mockReturnValue({
+        fileSearchAllowedByAgent: true,
+        codeAllowedByAgent: false,
+        provider: undefined,
+      });
+
+      setupMocks();
+      // Re-apply the specific overrides after setupMocks resets them
+      mockGetPdfPageCount.mockResolvedValue(15);
+      mockHandleFiles.mockResolvedValue(undefined);
+      mockUseFileHandlingNoChatContext.mockReturnValue({
+        handleFileChange: jest.fn(),
+        handleFiles: mockHandleFiles,
+      });
+      mockUseAgentCapabilities.mockReturnValue({
+        contextEnabled: false,
+        fileSearchEnabled: true,
+        codeEnabled: false,
+      });
+      mockUseAgentToolPermissions.mockReturnValue({
+        fileSearchAllowedByAgent: true,
+        codeAllowedByAgent: false,
+        provider: undefined,
+      });
+
+      renderMenu({ endpointType: 'openAI' });
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        const pdfFile = new File(['%PDF-1.4'], 'large.pdf', { type: 'application/pdf' });
+        Object.defineProperty(input, 'files', { value: [pdfFile], configurable: true });
+        fireEvent.change(input);
+        // wait for the async handler
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(mockHandleFiles).toHaveBeenCalledWith([pdfFile], 'file_search');
+      }
+    });
+
+    it('routes a PDF with <= 12 pages to provider (no toolResource)', async () => {
+      const { getPdfPageCount: mockGetPdfPageCount } = jest.requireMock('~/utils');
+      mockGetPdfPageCount.mockResolvedValue(5);
+
+      const mockHandleFiles = jest.fn().mockResolvedValue(undefined);
+
+      setupMocks();
+      mockGetPdfPageCount.mockResolvedValue(5);
+      mockHandleFiles.mockResolvedValue(undefined);
+      mockUseFileHandlingNoChatContext.mockReturnValue({
+        handleFileChange: jest.fn(),
+        handleFiles: mockHandleFiles,
+      });
+      mockUseAgentCapabilities.mockReturnValue({
+        contextEnabled: false,
+        fileSearchEnabled: true,
+        codeEnabled: false,
+      });
+      mockUseAgentToolPermissions.mockReturnValue({
+        fileSearchAllowedByAgent: true,
+        codeAllowedByAgent: false,
+        provider: undefined,
+      });
+
+      renderMenu({ endpointType: 'openAI' });
+
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (input) {
+        const pdfFile = new File(['%PDF-1.4'], 'small.pdf', { type: 'application/pdf' });
+        Object.defineProperty(input, 'files', { value: [pdfFile], configurable: true });
+        fireEvent.change(input);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(mockHandleFiles).toHaveBeenCalledWith([pdfFile], undefined);
+      }
+    });
+  });
     it('handles undefined endpoint and provider gracefully', () => {
       setupMocks();
       renderMenu({ endpoint: undefined, endpointType: undefined });

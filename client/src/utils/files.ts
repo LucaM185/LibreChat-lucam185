@@ -320,7 +320,10 @@ export const validateFiles = ({
 
 /**
  * Counts the number of pages in a PDF file by scanning for the `/Count N` directive
- * in the page tree dictionary. Falls back to 0 on any parse error.
+ * in the page tree dictionary. The root `/Pages` node always holds the largest count
+ * (equal to the total number of pages), so taking the maximum across all matches is
+ * the correct way to identify the document page count even in nested page-tree PDFs.
+ * Falls back to 0 on any parse error.
  */
 export async function getPdfPageCount(file: File): Promise<number> {
   try {
