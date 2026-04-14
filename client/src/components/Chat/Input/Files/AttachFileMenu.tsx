@@ -34,6 +34,34 @@ import { cn, getPdfPageCount, getDocxPageCount, isSpreadsheetFile, isWordDocumen
 
 const PDF_PAGE_THRESHOLD = 12;
 
+interface ToolRouteResult {
+  toolRes: EToolResources | undefined;
+  /** Which ephemeral-agent tool flags, if any, should be set to true */
+  agentFlag: EToolResources | undefined;
+}
+
+interface RouteContext {
+  canUseFileSearch: boolean;
+  canUseCode: boolean;
+  pageCount: number;
+}
+
+function routeSpreadsheet({ canUseCode }: Pick<RouteContext, 'canUseCode'>): ToolRouteResult {
+  return canUseCode
+    ? { toolRes: EToolResources.execute_code, agentFlag: EToolResources.execute_code }
+    : { toolRes: undefined, agentFlag: undefined };
+}
+
+function routeByPageCount(
+  pageCount: number,
+  { canUseFileSearch }: Pick<RouteContext, 'canUseFileSearch'>,
+): ToolRouteResult {
+  if (pageCount > PDF_PAGE_THRESHOLD && canUseFileSearch) {
+    return { toolRes: EToolResources.file_search, agentFlag: EToolResources.file_search };
+  }
+  return { toolRes: undefined, agentFlag: undefined };
+}
+
 interface AttachFileMenuProps {
   agentId?: string | null;
   endpoint?: string | null;
@@ -141,11 +169,10 @@ const AttachFileMenu = ({
 
       try {
         for (const file of fileList) {
-          let toolRes: EToolResources | undefined;
+          let result: ToolRouteResult = { toolRes: undefined, agentFlag: undefined };
 
-          if (isSpreadsheetFile(file) && canUseCode) {
-            toolRes = EToolResources.execute_code;
-            setEphemeralAgent((prev) => ({ ...prev, [EToolResources.execute_code]: true }));
+          if (isSpreadsheetFile(file)) {
+            result = routeSpreadsheet({ canUseCode });
           } else if (isWordDocument(file)) {
             const pageCount = await getDocxPageCount(file);
             if (pageCount === 0) {
@@ -154,24 +181,22 @@ const AttachFileMenu = ({
                 status: 'warning',
                 duration: 6000,
               });
-            } else if (pageCount > PDF_PAGE_THRESHOLD && canUseFileSearch) {
-              toolRes = EToolResources.file_search;
-              setEphemeralAgent((prev) => ({ ...prev, [EToolResources.file_search]: true }));
+            } else {
+              result = routeByPageCount(pageCount, { canUseFileSearch });
             }
           } else {
             const isPdf =
               file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-
-            if (isPdf && canUseFileSearch) {
+            if (isPdf) {
               const pageCount = await getPdfPageCount(file);
-              if (pageCount > PDF_PAGE_THRESHOLD) {
-                toolRes = EToolResources.file_search;
-                setEphemeralAgent((prev) => ({ ...prev, [EToolResources.file_search]: true }));
-              }
+              result = routeByPageCount(pageCount, { canUseFileSearch });
             }
           }
 
-          await handleFiles([file], toolRes);
+          if (result.agentFlag !== undefined) {
+            setEphemeralAgent((prev) => ({ ...prev, [result.agentFlag as EToolResources]: true }));
+          }
+          await handleFiles([file], result.toolRes);
         }
       } finally {
         setFilesLoading(false);

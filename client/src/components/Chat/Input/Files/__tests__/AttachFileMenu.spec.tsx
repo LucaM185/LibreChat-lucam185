@@ -365,7 +365,11 @@ describe('AttachFileMenu', () => {
         'unknown.docx',
       );
       expect(mockShowToast).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'warning' }),
+        expect.objectContaining({
+          status: 'warning',
+          message:
+            'Could not determine the page count for this document. For best results, please convert it to PDF before uploading.',
+        }),
       );
       expect(mockHandleFiles).toHaveBeenCalledWith([file], undefined);
     });
