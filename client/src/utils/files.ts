@@ -337,7 +337,63 @@ export async function getPdfPageCount(file: File): Promise<number> {
   }
 }
 
-export function sortPagesByRelevance(
+/**
+ * Counts the number of pages in a DOCX/ODT file by scanning the raw ZIP bytes for the
+ * `<Pages>N</Pages>` entry that Office stores in `docProps/app.xml`. The tag is written
+ * into a small, typically uncompressed XML file inside the ZIP archive, so a plain-text
+ * scan works without a ZIP/XML library in the vast majority of real-world documents.
+ * Returns 0 when the tag cannot be found (e.g. the file is corrupted, the entry is
+ * compressed, or the format does not include page metadata).
+ */
+export async function getDocxPageCount(file: File): Promise<number> {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const text = new TextDecoder('latin1').decode(new Uint8Array(arrayBuffer));
+    const match = text.match(/<Pages>(\d+)<\/Pages>/);
+    if (!match) return 0;
+    return parseInt(match[1], 10);
+  } catch {
+    return 0;
+  }
+}
+
+/** Returns true when the MIME type or file extension indicates a spreadsheet (CSV / Excel / ODS). */
+export function isSpreadsheetFile(file: File): boolean {
+  const type = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+  if (type === 'text/csv' || type === 'application/csv' || type === 'text/comma-separated-values') {
+    return true;
+  }
+  if (
+    /^application\/(vnd\.ms-excel|msexcel|x-msexcel|x-ms-excel|x-excel|x-dos_ms_excel|xls|x-xls|vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet)$/.test(
+      type,
+    )
+  ) {
+    return true;
+  }
+  if (type === 'application/vnd.oasis.opendocument.spreadsheet') {
+    return true;
+  }
+  return /\.(csv|xls|xlsx|ods)$/.test(name);
+}
+
+/** Returns true when the MIME type or file extension indicates a word-processor document (DOCX / DOC / ODT / RTF). */
+export function isWordDocument(file: File): boolean {
+  const type = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+  if (
+    type === 'application/msword' ||
+    type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    type === 'application/vnd.oasis.opendocument.text' ||
+    type === 'application/rtf' ||
+    type === 'text/rtf'
+  ) {
+    return true;
+  }
+  return /\.(doc|docx|odt|rtf)$/.test(name);
+}
+
+
   pages: number[],
   pageRelevance: Record<number, number>,
 ): number[] {

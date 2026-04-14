@@ -14,6 +14,7 @@ import {
   DropdownPopup,
   AttachmentIcon,
   SharePointIcon,
+  useToastContext,
 } from '@librechat/client';
 import * as Ariakit from '@ariakit/react';
 import type { EndpointFileConfig, TConversation } from 'librechat-data-provider';
@@ -29,7 +30,7 @@ import { useSharePointFileHandlingNoChatContext } from '~/hooks/Files/useSharePo
 import { SharePointPickerDialog } from '~/components/SharePoint';
 import { useGetStartupConfig } from '~/data-provider';
 import { ephemeralAgentByConvoId } from '~/store';
-import { cn, getPdfPageCount } from '~/utils';
+import { cn, getPdfPageCount, getDocxPageCount, isSpreadsheetFile, isWordDocument } from '~/utils';
 
 const PDF_PAGE_THRESHOLD = 12;
 
@@ -61,6 +62,7 @@ const AttachFileMenu = ({
   conversation,
 }: AttachFileMenuProps) => {
   const localize = useLocalize();
+  const { showToast } = useToastContext();
   const isUploadDisabled = disabled ?? false;
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPopoverActive, setIsPopoverActive] = useState(false);
@@ -87,7 +89,10 @@ const AttachFileMenu = ({
 
   const capabilities = useAgentCapabilities(agentsConfig?.capabilities ?? defaultAgentCapabilities);
 
-  const { fileSearchAllowedByAgent, provider } = useAgentToolPermissions(agentId, ephemeralAgent);
+  const { fileSearchAllowedByAgent, codeAllowedByAgent, provider } = useAgentToolPermissions(
+    agentId,
+    ephemeralAgent,
+  );
 
   /** Compute the accept string once, based on the current endpoint/provider */
   const acceptTypes = useMemo(() => {
@@ -98,19 +103,26 @@ const AttachFileMenu = ({
     if (currentProvider?.toLowerCase() === Providers.OPENROUTER) {
       currentProvider = Providers.OPENROUTER;
     }
+    const docAndSheet =
+      '.doc,.docx,.odt,.rtf,.xls,.xlsx,.ods,.csv,application/msword,' +
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document,' +
+      'application/vnd.oasis.opendocument.text,application/rtf,text/rtf,' +
+      'application/vnd.ms-excel,' +
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,' +
+      'application/vnd.oasis.opendocument.spreadsheet,text/csv,application/csv';
     if (
       currentProvider === Providers.BEDROCK ||
       endpointType === EModelEndpoint.bedrock
     ) {
-      return `image/*,.heif,.heic,${bedrockDocumentExtensions}`;
+      return `image/*,.heif,.heic,${bedrockDocumentExtensions},${docAndSheet}`;
     }
     if (
       currentProvider === Providers.GOOGLE ||
       currentProvider === Providers.OPENROUTER
     ) {
-      return 'image/*,.heif,.heic,.pdf,application/pdf,video/*,audio/*';
+      return `image/*,.heif,.heic,.pdf,application/pdf,video/*,audio/*,${docAndSheet}`;
     }
-    return 'image/*,.heif,.heic,.pdf,application/pdf';
+    return `image/*,.heif,.heic,.pdf,application/pdf,${docAndSheet}`;
   }, [provider, endpoint, endpointType, endpointFileConfig?.supportedMimeTypes]);
 
   /** Determine the appropriate tool resource for a file and handle uploading it */
@@ -125,19 +137,37 @@ const AttachFileMenu = ({
       event.target.value = '';
 
       const canUseFileSearch = capabilities.fileSearchEnabled && fileSearchAllowedByAgent;
+      const canUseCode = capabilities.codeEnabled && codeAllowedByAgent;
 
       try {
         for (const file of fileList) {
           let toolRes: EToolResources | undefined;
 
-          const isPdf =
-            file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-
-          if (isPdf && canUseFileSearch) {
-            const pageCount = await getPdfPageCount(file);
-            if (pageCount > PDF_PAGE_THRESHOLD) {
+          if (isSpreadsheetFile(file) && canUseCode) {
+            toolRes = EToolResources.execute_code;
+            setEphemeralAgent((prev) => ({ ...prev, [EToolResources.execute_code]: true }));
+          } else if (isWordDocument(file)) {
+            const pageCount = await getDocxPageCount(file);
+            if (pageCount === 0) {
+              showToast({
+                message: localize('com_error_docx_parse'),
+                status: 'warning',
+                duration: 6000,
+              });
+            } else if (pageCount > PDF_PAGE_THRESHOLD && canUseFileSearch) {
               toolRes = EToolResources.file_search;
               setEphemeralAgent((prev) => ({ ...prev, [EToolResources.file_search]: true }));
+            }
+          } else {
+            const isPdf =
+              file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
+            if (isPdf && canUseFileSearch) {
+              const pageCount = await getPdfPageCount(file);
+              if (pageCount > PDF_PAGE_THRESHOLD) {
+                toolRes = EToolResources.file_search;
+                setEphemeralAgent((prev) => ({ ...prev, [EToolResources.file_search]: true }));
+              }
             }
           }
 
@@ -149,10 +179,14 @@ const AttachFileMenu = ({
     },
     [
       capabilities.fileSearchEnabled,
+      capabilities.codeEnabled,
       fileSearchAllowedByAgent,
+      codeAllowedByAgent,
       handleFiles,
       setEphemeralAgent,
       setFilesLoading,
+      showToast,
+      localize,
     ],
   );
 
