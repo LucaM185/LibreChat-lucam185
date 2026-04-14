@@ -318,6 +318,22 @@ export const validateFiles = ({
   return true;
 };
 
+/**
+ * Counts the number of pages in a PDF file by scanning for the `/Count N` directive
+ * in the page tree dictionary. Falls back to 0 on any parse error.
+ */
+export async function getPdfPageCount(file: File): Promise<number> {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const text = new TextDecoder('latin1').decode(new Uint8Array(arrayBuffer));
+    const matches = [...text.matchAll(/\/Count\s+(\d+)/g)];
+    if (matches.length === 0) return 0;
+    return Math.max(...matches.map((m) => parseInt(m[1], 10)));
+  } catch {
+    return 0;
+  }
+}
+
 export function sortPagesByRelevance(
   pages: number[],
   pageRelevance: Record<number, number>,
