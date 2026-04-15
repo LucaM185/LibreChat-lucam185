@@ -589,7 +589,7 @@ describe('isActionDomainAllowed', () => {
       expect(await isActionDomainAllowed('192.168.1.1', null)).toBe(false);
       expect(await isActionDomainAllowed('169.254.169.254', null)).toBe(false);
       expect(await isActionDomainAllowed('rag_api', null)).toBe(false);
-      expect(await isActionDomainAllowed('http://rag_api:8000', null)).toBe(false);
+      expect(await isActionDomainAllowed('http://host.docker.internal:8765', null)).toBe(false);
     });
 
     it('should allow public domains with no restrictions', async () => {
